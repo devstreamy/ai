@@ -9,7 +9,7 @@ from addon.checkbox import (accessToScreenCheckbox,
                           ShowMicIndexCheckbox,
                           timeoutLogsCheckbox,
                           getConfigInfo)
-import os
+import os, asyncio
 import tempfile
 from flet import (
     Banner, 
@@ -51,7 +51,8 @@ from modules.other import (play_random_phrase,
                            recognizeDiscussion_thread,
                            system_info,
                            list_all_folders,
-                           answerPathIMAGE)
+                           answerPathIMAGE,
+                           game_install)
 from modules.world import (get_weather)
 from modules.window import (recordScreen_thread,)
 from modules.protocols import (Protocol21Thread)
@@ -76,8 +77,15 @@ import sounddevice as sd
 import queue, json, sys
 from addon.checkbox import getConfigInfo
 from utils.logs import logUser, stopColor
+from aiogram import Bot, Dispatcher, types
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils import executor
+import pyautogui
 
 q = queue.Queue()
+API_TOKEN = getConfigInfo('telegram', "API_TOKEN")
+ALLOWED_USER = getConfigInfo('telegram', "ALLOWED_USER")
 
 def q_callback(indata, frames, time, status):
     if status:
@@ -98,6 +106,9 @@ if getConfigInfo('main', "chatgpt") == 'gpt-4o':
 
 def process_command(command_text):
     from utils.commands import commands
+    download_install_patterns = [
+        r"(скачай|установи) (.+)"
+    ]
     name_pattern = fr"^({nameConfig}[, ]+)(.*)"
     name_match = re.match(name_pattern, command_text, re.IGNORECASE)
     message_match = re.match(r"(напиши|отпиши) ([^ ]+) (.+)", command_text, re.IGNORECASE)
@@ -164,11 +175,124 @@ def process_command(command_text):
         speach(answer)
         recognizeDiscussion_thread()
 
+    elif any(re.search(pattern, command_text, re.IGNORECASE) for pattern in download_install_patterns):
+        match = re.search(r"(скачай|установи) (.+)", command_text, re.IGNORECASE)
+        if match:
+            action = match.group(1)
+            game = match.group(2)
+            print(logSystem + f"начинаем процесс '{action}' игры '{game}'" + stopColor)
+            game_install(command_text)
+            #speach(f"начинаем процесс {action} игры {game}")
+            return
+
     for keywords, action in commands.items():
         if all(keyword in command_text.lower() for keyword in keywords):
             threading.Thread(target=action).start()
             play_random_phrase(25)
             return
+
+async def telegram_bot():
+    print(logSystem+"telegram bot успешно запущен"+stopColor)
+    bot = Bot(token=API_TOKEN)
+    dp = Dispatcher(bot)
+    dp.middleware.setup(LoggingMiddleware())
+
+    button_screenshot = KeyboardButton('💻 Скриншот экрана')
+    button_process_command = KeyboardButton('💾 Отправка сообщения')
+    button_lock_pc = KeyboardButton('⚙️ Заблокировать компьютер')
+    button_off_mic = KeyboardButton('🎙 Выключить микрофон')
+    button_on_mic = KeyboardButton('🎙 Включить микрофон')
+    button_reboot_pc = KeyboardButton('🔄 Перезагрузить компьютер')
+    button_shutdown_pc = KeyboardButton('🔌 Выключить компьютер')
+
+    markup = ReplyKeyboardMarkup(resize_keyboard=True).add(button_screenshot).add(button_process_command, button_lock_pc).add(button_off_mic, button_on_mic).add(button_reboot_pc, button_shutdown_pc)
+
+    async def check_user(message: types.Message):
+        if str(message.from_user.id) != ALLOWED_USER:
+            await message.answer("У вас нет доступа к этому боту.")
+            return False
+        return True
+
+    @dp.message_handler(commands=['start'])
+    async def send_welcome(message: types.Message):
+        if not await check_user(message):
+            return
+        await message.answer("⌚️ Выберите действие:", reply_markup=markup)
+
+    @dp.message_handler(lambda message: message.text == '💻 Скриншот экрана')
+    async def screenshot_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        screenshot = pyautogui.screenshot()
+        screenshot.save("screenshot.png")
+        await message.answer_photo(photo=open("screenshot.png", 'rb'))
+        os.remove("screenshot.png")
+
+    @dp.message_handler(lambda message: message.text == '💾 Отправка сообщения')
+    async def process_command_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        await message.answer("💾 Введите сообщение:")
+
+    @dp.message_handler(lambda message: message.text == '⚙️ Заблокировать компьютер')
+    async def lock_pc_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        if os.name == 'nt':
+            os.system('rundll32.exe user32.dll,LockWorkStation')
+            await message.answer("💾 Компьютер успешно заблокирован.")
+        else:
+            os.system('gnome-screensaver-command -l')
+
+    @dp.message_handler(lambda message: message.text == '🎙 Выключить микрофон')
+    async def off_mic_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        updateConfigname("utils/config.json", 0, "mic_index", "other")
+        updateConfigname("utils/config.json", 'True', "mic_id", "other")
+        updateConfigname("utils/config.json", 1, "timeout", "other")
+        await message.answer("🎙 Микрофон выключен")
+
+    @dp.message_handler(lambda message: message.text == '🎙 Включить микрофон')
+    async def on_mic_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        updateConfigname("utils/config.json", 2, "mic_index", "other")
+        updateConfigname("utils/config.json", 'False', "mic_id", "other")
+        updateConfigname("utils/config.json", 30, "timeout", "other")
+        await message.answer("🎙 Микрофон включен")
+
+    @dp.message_handler(lambda message: message.text == '🔄 Перезагрузить компьютер')
+    async def reboot_pc_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        if os.name == 'nt':
+            os.system('shutdown /r /t 0')
+        else:
+            os.system('sudo reboot')
+        await message.answer("🔄 Компьютер перезагружается.")
+
+    @dp.message_handler(lambda message: message.text == '🔌 Выключить компьютер')
+    async def shutdown_pc_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        if os.name == 'nt':
+            os.system('shutdown /s /t 0')
+        else:
+            os.system('sudo shutdown now')
+        await message.answer("🔌 Компьютер выключается.")
+
+    @dp.message_handler()
+    async def echo(message: types.Message):
+        if not await check_user(message):
+            return
+        await message.answer(f"Команда успешно выполнена.")
+        process_command(message.text)
+
+    await dp.start_polling()
+
+def run_telegram_bot():
+    asyncio.run(telegram_bot())
 
 LIGHT_SEED_COLOR = colors.DEEP_ORANGE
 DARK_SEED_COLOR = colors.DEEP_PURPLE_200
@@ -252,7 +376,6 @@ def main(page: Page):
         elif e.control.checked == False:
             updateConfigname("utils/config.json", 'False', "FullLogs", "settings")
             page.update()
-
     def mic_use(e):
         try:
             e.control.selected = not e.control.selected
@@ -468,6 +591,8 @@ def main(page: Page):
             print(logSystem+'протокол 21 был успешно запущен'+stopColor+show_current_datetime())
             Protocol21Thread()
         telegram_contacts_thread()
+        bot_thread = threading.Thread(target=run_telegram_bot)
+        bot_thread.start()
         cmd.value = cmd.value+'\n'+logSystemApp+'протокол 21 был успешно запущен'+show_current_datetime()
         page.update()
 
@@ -1793,10 +1918,8 @@ def main(page: Page):
                         bgcolor=ft.colors.AMBER,
                     )
                 text = ft.Container(ft.Text(new_message.value, 
-                    width=1000,
-                    color=ft.colors.BLACK87),
+                    width=1000),
                     border=ft.border.all(1, ft.colors.AMBER),
-                    bgcolor=ft.colors.WHITE,
                     border_radius=30,
                     padding=15)
                 message = ft.Row(
@@ -1821,10 +1944,9 @@ def main(page: Page):
                 text = ft.Container(
                     ft.Text(
                         answer, 
-                        width=1000,
-                        color=ft.colors.BLACK87),
+                        width=1000
+                        ),
                         border=ft.border.all(1, ft.colors.AMBER),
-                        bgcolor=ft.colors.WHITE,
                         border_radius=30,
                         padding=15
                 )
