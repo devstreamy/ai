@@ -101,7 +101,7 @@ FullLogs = FullLogsConfig
 recognizer = sr.Recognizer()
 recognized_phrases = []
 installed = None
-if getConfigInfo('main', "chatgpt") == 'gpt-4o':
+if getConfigInfo('main', "chatgpt") == 'gpt-4oa':
     all_paths = list_all_folders()
 
 def process_command(command_text):
@@ -175,15 +175,15 @@ def process_command(command_text):
         speach(answer)
         recognizeDiscussion_thread()
 
-    elif any(re.search(pattern, command_text, re.IGNORECASE) for pattern in download_install_patterns):
-        match = re.search(r"(скачай|установи) (.+)", command_text, re.IGNORECASE)
-        if match:
-            action = match.group(1)
-            game = match.group(2)
-            print(logSystem + f"начинаем процесс '{action}' игры '{game}'" + stopColor)
-            game_install(command_text)
-            #speach(f"начинаем процесс {action} игры {game}")
-            return
+    # elif any(re.search(pattern, command_text, re.IGNORECASE) for pattern in download_install_patterns):
+    #     match = re.search(r"(скачай|установи) (.+)", command_text, re.IGNORECASE)
+    #     if match:
+    #         action = match.group(1)
+    #         game = match.group(2)
+    #         print(logSystem + f"начинаем процесс '{action}' игры '{game}'" + stopColor)
+    #         game_install(command_text)
+    #         #speach(f"начинаем процесс {action} игры {game}")
+    #         return
 
     for keywords, action in commands.items():
         if all(keyword in command_text.lower() for keyword in keywords):
