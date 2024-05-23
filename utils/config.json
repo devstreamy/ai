@@ -8,6 +8,10 @@
         "recogniz": "speach_recognize",
         "city": "Your city"
     },
+    "telegram": {
+        "API_TOKEN": "your api token bot",
+        "ALLOWED_USER": "your id"
+    },
     "settings": {
         "CheckScreen": "True",
         "CheckCamera": "False",
