@@ -58,5 +58,6 @@ Dorothy — это мощный голосовой ассистент, подд�
 
 ```bash
 pip install -r requirements.txt
+pip install flet==0.22.0 psutil==5.9.7 aiogram==2.21 SpeechRecognition==3.10.4
 python app.py
 ```
