@@ -13,7 +13,7 @@ app = Client("modules/sessions/telegram.session", api_id=api_id, api_hash=api_ha
 def telegram_contacts():
     try:
         while True:
-            print(logSystem+"список контактов телеграм обновился"+stopColor+show_current_datetime())
+            print(logSystem+"✓ список контактов телеграм обновился"+stopColor+show_current_datetime())
             file_path = "modules/messengers/telegram.txt"
             if os.path.exists(file_path):
                 os.remove(file_path)

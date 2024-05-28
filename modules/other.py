@@ -1,9 +1,10 @@
-import random, os, time, threading, subprocess, shutil, json, GPUtil, psutil, PyPDF2
+import random, os, time, threading, subprocess, shutil, json, GPUtil, psutil, PyPDF2, pyautogui
 from utils.logs import logSystem, stopColor, logError, logDiscussion, logtranslate, logWindow
 from datetime import datetime
 from utils.config import (FullLogsConfig, mic_indexConfig)
 import speech_recognition as sr
 from modules.crypt import encrypt, key
+import pygetwindow as gw
 
 recognizer = sr.Recognizer()
 phrases = ["Сделано", "Да сэр", "Хорошо", "Будет сделано", "Сделала"]
@@ -189,11 +190,12 @@ def recognizeDiscussion_thread():
     thread.start()
 
 def updateConfigname(config_path, new_name, id, configValue):
-    with open(config_path, 'r') as file:
+    with open(config_path, 'r', encoding='utf-8') as file:
         config = json.load(file)
     config[configValue][id] = new_name
-    with open(config_path, 'w') as file:
-        json.dump(config, file, indent=4)
+    with open(config_path, 'w', encoding='utf-8') as file:
+        json.dump(config, file, ensure_ascii=False, indent=4)
+
         
 def recognizetranslate():
     from modules.chatgpt import ask_translition
@@ -290,3 +292,64 @@ def answerPathIMAGE(app, all_paths):
                 open_program(item)
                 print(logWindow+f'приложение :: {item} :: успешно открыто')
                 break
+
+def game_install(text, steam_directory="C:\\Program Files (x86)\\Steam\\steamapps\\common", min_size_mb=300):
+    from modules.chatgpt import ask_games
+
+    c = ask_games(text).split('|')
+    print(c)
+    game_name = c[0]
+    app_id = c[1]
+    game_path = os.path.join(steam_directory, game_name)
+    
+    if not os.path.exists(game_path) or not os.path.isdir(game_path):
+        try:
+            # Запускаем Steam с параметром для установки игры
+            command = f'start steam://install/{app_id}'
+            os.system(command)
+            print(f"Запуск установки игры с AppID {app_id}.")
+
+            # Ждем несколько секунд, чтобы Steam успел открыть окно установки
+            time.sleep(10)
+            
+            # Имитируем нажатие на кнопку "Установить"
+            install_button_position = pyautogui.locateCenterOnScreen('steamwebhelper_hUwgGEtoSI.png')
+            if install_button_position:
+                pyautogui.click(install_button_position)
+                print("Нажата кнопка 'Установить'.")
+            else:
+                print("Не удалось найти кнопку 'Установить'.")
+
+        except subprocess.CalledProcessError as e:
+            print(f"Произошла ошибка при попытке установить игру: {e}")
+    
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(game_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if os.path.exists(fp):
+                total_size += os.path.getsize(fp)
+    
+    folder_size_mb = total_size / (1024 * 1024)
+    if folder_size_mb > min_size_mb:
+        pass
+    else:
+        try:
+            # Запускаем Steam с параметром для установки игры
+            command = f'start steam://install/{app_id}'
+            os.system(command)
+            print(f"Запуск установки игры с AppID {app_id}.")
+
+            # Ждем несколько секунд, чтобы Steam успел открыть окно установки
+            time.sleep(10)
+            
+            # Имитируем нажатие на кнопку "Установить"
+            install_button_position = pyautogui.locateCenterOnScreen('steamwebhelper_hUwgGEtoSI.png')
+            if install_button_position:
+                pyautogui.click(install_button_position)
+                print("Нажата кнопка 'Установить'.")
+            else:
+                print("Не удалось найти кнопку 'Установить'.")
+
+        except subprocess.CalledProcessError as e:
+            print(f"Произошла ошибка при попытке установить игру: {e}")
