@@ -1,6 +1,6 @@
 {
     "main": {
-        "version": 1.5,
+        "version": 1.0.2,
         "name": "Name assistant",
         "chatgpt": "gpt-4o",
         "openai_apikey": "api key",
