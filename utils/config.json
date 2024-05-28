@@ -6,7 +6,8 @@
         "openai_apikey": "api key",
         "searchSite": "https://yandex.ru/search/?text=",
         "recogniz": "speach_recognize",
-        "city": "Your city"
+        "city": "Your city",
+        "start": 0
     },
     "microphone": {
         "active": 2,
