@@ -2,11 +2,15 @@
     "main": {
         "version": 1.5,
         "name": "Name assistant",
-        "chatgpt": "gpt-3.5-turbo",
+        "chatgpt": "gpt-4o",
         "openai_apikey": "api key",
         "searchSite": "https://yandex.ru/search/?text=",
         "recogniz": "speach_recognize",
         "city": "Your city"
+    },
+    "microphone": {
+        "active": 2,
+        "disabled": 0
     },
     "telegram": {
         "API_TOKEN": "your api token bot",
@@ -17,7 +21,7 @@
         "CheckCamera": "False",
         "VoiceLoging": "True",
         "FullLogs": "True",
-        "Autoload": "True"
+        "Autoload": "False"
     },
     "vosk": {
         "model": "small_ru"
