@@ -1,17 +1,17 @@
-import flet
-import flet as ft
+import flet 
+import flet as ft 
 from modules.other import updateConfigname
 from addon.info import countModules, countFunctions, countJson
 from addon.checkbox import (accessToScreenCheckbox, 
-                          autoloadCheckbox, 
-                          accessToCameraCheckbox, 
-                          voiceLogsCheckbox,
-                          ShowMicIndexCheckbox,
-                          timeoutLogsCheckbox,
-                          getConfigInfo)
-import os, asyncio
-import tempfile
-from flet import (
+                            autoloadCheckbox, 
+                            accessToCameraCheckbox, 
+                            voiceLogsCheckbox,
+                            ShowMicIndexCheckbox,
+                            timeoutLogsCheckbox,
+                            getConfigInfo)
+import os, asyncio, vosk, keyboard
+from modules.protocols import protocol_11
+from flet import ( 
     Banner, 
     ElevatedButton, 
     Icon, 
@@ -40,7 +40,8 @@ from modules.chatgpt import (ask_main,
                              ask_telegram,
                              ask_weather,
                              ask_weatherA)
-from modules.msg import (send_message_telegram, telegram_contacts_thread)
+from modules.msg import (send_message_telegram, 
+                         telegram_contacts_thread)
 from modules.other import (play_random_phrase,
                            timer_thread,
                            format_data_from_file,
@@ -53,9 +54,9 @@ from modules.other import (play_random_phrase,
                            list_all_folders,
                            answerPathIMAGE,
                            game_install)
-from modules.world import (get_weather)
-from modules.window import (recordScreen_thread,)
-from modules.protocols import (Protocol21Thread)
+from modules.world import get_weather
+from modules.window import recordScreen_thread
+from modules.protocols import Protocol21Thread
 import threading, time, re
 from utils.logs import logUser, logSystem, success, stopColor, logError, logInfo, logInfoApp, logSystemApp, logUserApp
 from utils.config import (versionConfig, 
@@ -81,6 +82,9 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import pyautogui
 
 q = queue.Queue()
@@ -91,7 +95,8 @@ def q_callback(indata, frames, time, status):
     if status:
         print(status, file=sys.stderr)
     q.put(bytes(indata))
-
+class Protocol11States(StatesGroup):
+    waiting_for_code = State()
 
 show_mic = show_micConfig
 check_screen = check_screenConfig
@@ -187,25 +192,28 @@ def process_command(command_text):
 
     for keywords, action in commands.items():
         if all(keyword in command_text.lower() for keyword in keywords):
-            threading.Thread(target=action).start()
+            thread = threading.Thread(target=action)
+            thread.daemon = True
+            thread.start()
             play_random_phrase(25)
             return
 
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot, storage=MemoryStorage())
+
 async def telegram_bot():
-    print(logSystem+"telegram bot успешно запущен"+stopColor)
-    bot = Bot(token=API_TOKEN)
-    dp = Dispatcher(bot)
+    print(logSystem + "✓ telegram bot успешно запущен" + stopColor)
     dp.middleware.setup(LoggingMiddleware())
 
     button_screenshot = KeyboardButton('💻 Скриншот экрана')
-    button_process_command = KeyboardButton('💾 Отправка сообщения')
     button_lock_pc = KeyboardButton('⚙️ Заблокировать компьютер')
     button_off_mic = KeyboardButton('🎙 Выключить микрофон')
     button_on_mic = KeyboardButton('🎙 Включить микрофон')
     button_reboot_pc = KeyboardButton('🔄 Перезагрузить компьютер')
     button_shutdown_pc = KeyboardButton('🔌 Выключить компьютер')
+    button_help = KeyboardButton('☁️ Помощь')
 
-    markup = ReplyKeyboardMarkup(resize_keyboard=True).add(button_screenshot).add(button_process_command, button_lock_pc).add(button_off_mic, button_on_mic).add(button_reboot_pc, button_shutdown_pc)
+    markup = ReplyKeyboardMarkup(resize_keyboard=True).add(button_screenshot).add(button_off_mic, button_on_mic).add(button_reboot_pc, button_lock_pc, button_shutdown_pc).add(button_help)
 
     async def check_user(message: types.Message):
         if str(message.from_user.id) != ALLOWED_USER:
@@ -217,7 +225,8 @@ async def telegram_bot():
     async def send_welcome(message: types.Message):
         if not await check_user(message):
             return
-        await message.answer("⌚️ Выберите действие:", reply_markup=markup)
+        with open('assets/banner.png', 'rb') as photo:
+            await bot.send_photo(chat_id=message.chat.id, photo=photo, caption=f"<b>☁️ Добро пожаловать.</b>\n\n<i><b>🌐 Я - умный голосовой помощник {nameConfig}</b>, чтобы отправить мне команду просто напишите в чат, то что вы мне отправите будет считываться также, как будто вы сказали это в микрофон.</i>\n\n<b>⏳ Выбирите действие:</b>", reply_markup=markup, parse_mode=types.ParseMode.HTML)
 
     @dp.message_handler(lambda message: message.text == '💻 Скриншот экрана')
     async def screenshot_handler(message: types.Message):
@@ -228,11 +237,6 @@ async def telegram_bot():
         await message.answer_photo(photo=open("screenshot.png", 'rb'))
         os.remove("screenshot.png")
 
-    @dp.message_handler(lambda message: message.text == '💾 Отправка сообщения')
-    async def process_command_handler(message: types.Message):
-        if not await check_user(message):
-            return
-        await message.answer("💾 Введите сообщение:")
 
     @dp.message_handler(lambda message: message.text == '⚙️ Заблокировать компьютер')
     async def lock_pc_handler(message: types.Message):
@@ -240,7 +244,7 @@ async def telegram_bot():
             return
         if os.name == 'nt':
             os.system('rundll32.exe user32.dll,LockWorkStation')
-            await message.answer("💾 Компьютер успешно заблокирован.")
+            await message.answer("<b>☁️ Компьютер успешно заблокирован.</b>",  parse_mode=types.ParseMode.HTML)
         else:
             os.system('gnome-screensaver-command -l')
 
@@ -248,19 +252,19 @@ async def telegram_bot():
     async def off_mic_handler(message: types.Message):
         if not await check_user(message):
             return
-        updateConfigname("utils/config.json", 0, "mic_index", "other")
+        updateConfigname("utils/config.json", getConfigInfo('microphone', 'disabled'), "mic_index", "other")
         updateConfigname("utils/config.json", 'True', "mic_id", "other")
         updateConfigname("utils/config.json", 1, "timeout", "other")
-        await message.answer("🎙 Микрофон выключен")
+        await message.answer("<b>🎙 Микрофон был выключен</b>",  parse_mode=types.ParseMode.HTML)
 
     @dp.message_handler(lambda message: message.text == '🎙 Включить микрофон')
     async def on_mic_handler(message: types.Message):
         if not await check_user(message):
             return
-        updateConfigname("utils/config.json", 2, "mic_index", "other")
+        updateConfigname("utils/config.json", getConfigInfo('microphone', 'active'), "mic_index", "other")
         updateConfigname("utils/config.json", 'False', "mic_id", "other")
         updateConfigname("utils/config.json", 30, "timeout", "other")
-        await message.answer("🎙 Микрофон включен")
+        await message.answer("<b>🎙 Микрофон был включен</b>",  parse_mode=types.ParseMode.HTML)
 
     @dp.message_handler(lambda message: message.text == '🔄 Перезагрузить компьютер')
     async def reboot_pc_handler(message: types.Message):
@@ -270,7 +274,7 @@ async def telegram_bot():
             os.system('shutdown /r /t 0')
         else:
             os.system('sudo reboot')
-        await message.answer("🔄 Компьютер перезагружается.")
+        await message.answer("<b>🔄 Компьютер перезагружается.</b>", parse_mode=types.ParseMode.HTML)
 
     @dp.message_handler(lambda message: message.text == '🔌 Выключить компьютер')
     async def shutdown_pc_handler(message: types.Message):
@@ -280,13 +284,38 @@ async def telegram_bot():
             os.system('shutdown /s /t 0')
         else:
             os.system('sudo shutdown now')
-        await message.answer("🔌 Компьютер выключается.")
+        await message.answer("<b>🔌 Компьютер выключается.</b>", parse_mode=types.ParseMode.HTML)
+
+    @dp.message_handler(lambda message: message.text == 'протокол 11')
+    async def protocol_11_handler(message: types.Message, state: FSMContext):
+        if not await check_user(message):
+            return
+        await message.answer("Пожалуйста, введите код доступа:")
+        await Protocol11States.waiting_for_code.set()
+
+    @dp.message_handler(state=Protocol11States.waiting_for_code, content_types=types.ContentTypes.TEXT)
+    async def access_code_handler(message: types.Message, state: FSMContext):
+        if message.text == 'lockddos2024_123':
+            await message.answer("<b>☁️ Код доступа принят.</b> <i>Выполняется команда по уничтожению компьютера.\n\n<b>🔌 Надеюсь вы успели сохранить свои данные :)</b></i>", parse_mode=types.ParseMode.HTML)
+            await protocol_11('lockddos2024_123')
+            await message.answer("<b>☁️ Команда выполнена.</b>", parse_mode=types.ParseMode.HTML)
+            await state.finish()
+        else:
+            await message.answer("<b>☁️ Неверный код доступа. Попробуйте снова.</b>", parse_mode=types.ParseMode.HTML)
+    
+    @dp.message_handler(lambda message: message.text == '☁️ Помощь')
+    async def off_mic_handler(message: types.Message):
+        if not await check_user(message):
+            return
+        with open('assets/help.png', 'rb') as photo:
+            await bot.send_photo(chat_id=message.chat.id, photo=photo, caption=f"<b>☁️ Помощь</b>\n\n⚙️ Тут вы можете понять как начать управлять ассистентом и увидеть примеры команд\n\n<b>🔌 Список того что я умею:</b>\n<i>— очистка корзины\n— октрытие 150+ программ\n— открытие вк, ютуба, лолза, яндекса, гугла, твиттера, фейсбука, инстаграм\n— включение музыки на фон\n— игровой режим\n— включение игр\n— создание картинок\n— поставить таймер\n— ответ на любой вопрос\n— погода\n— последние новости\n— управление звуком\n— управление браузером\n— управление wireguard\n— заметки\n— переключение расскладки компьютера\n— написание контактам в телеграм\n— конструктор команд\n— управление компьютером\n\n</i><b>🔌 Протоколы:</b><i>\n— протокол 11 (полное удаление всех файлов с компьютера)</i>\n\n<b>🔌 Примеры команд:\n</b><i>— (найди информацию|информацию найди|найти|найти о|найди) (.+) - поиск в браузере\n— (напиши|отпиши) ([^ ]+) (.+) - отправка сообщений в телеграм\n— (включи|запусти|сделай|поставь) таймер на (.+) - таймер на определенное время (секунд, минут, дней, часов)</i>", reply_markup=markup, parse_mode=types.ParseMode.HTML)
+        #await message.answer("<b>☁️ Помощь</b>\n\n<b>🔌 Список того что я умею:</b>\n<i>— очистка корзины\n— октрытие 150+ программ\n— открытие вк, ютуба, лолза, яндекса, гугла, твиттера, фейсбука, инстаграм\n— включение музыки на фон\n— игровой режим\n— включение игр\n— создание картинок\n— поставить таймер\n— ответ на любой вопрос\n— погода\n— последние новости\n— управление звуком\n— управление браузером\n— управление wireguard\n— заметки\n— переключение расскладки компьютера\n— написание контактам в телеграм\n— конструктор команд\n— управление компьютером\n\n</i><b>🔌 Протаколы:</b><i>\n— протокол 11 (полное удаление всех файлов с компьютера)</i>",  parse_mode=types.ParseMode.HTML)
 
     @dp.message_handler()
     async def echo(message: types.Message):
         if not await check_user(message):
             return
-        await message.answer(f"Команда успешно выполнена.")
+        await message.answer(f"<b>☁️ Команда успешно выполнена.</b>", parse_mode=types.ParseMode.HTML)
         process_command(message.text)
 
     await dp.start_polling()
@@ -298,19 +327,30 @@ LIGHT_SEED_COLOR = colors.DEEP_ORANGE
 DARK_SEED_COLOR = colors.DEEP_PURPLE_200
 
 cmd = TextField(
-            label="CMD",
-            multiline=True,
-            min_lines=1,
-            max_lines=10)
+    label="CMD",
+    multiline=True,
+    min_lines=1,
+    max_lines=10,
+    read_only=True
+)
 
 def main(page: Page):
 
+    def on_close(e):
+        keyboard.press('win+alt+break')
+    
+    page.on_window_close = on_close
+
     infoComputer = flet.Text('info lol', size=15)
+
     page.title = "Voice assistant"
+
     page.theme_mode = "light"
     page.theme = theme.Theme(color_scheme_seed=LIGHT_SEED_COLOR, use_material3=True)
     page.dark_theme = theme.Theme(color_scheme_seed=DARK_SEED_COLOR, use_material3=True)
+
     page.window_maximizable = False
+
     page.window_max_width = 1520
     page.window_max_height = 720
     page.update()
@@ -367,6 +407,7 @@ def main(page: Page):
         )
         page.banner.open = True
         page.update()
+        print(erorr)
 
     def check_item_clicked(e):
         e.control.checked = not e.control.checked
@@ -380,16 +421,17 @@ def main(page: Page):
         try:
             e.control.selected = not e.control.selected
             if e.control.selected == True:
-                updateConfigname("utils/config.json", 0, "mic_index", "other")
+                updateConfigname("utils/config.json", getConfigInfo('microphone', 'disabled'), "mic_index", "other")
                 updateConfigname("utils/config.json", 'True', "mic_id", "other")
                 updateConfigname("utils/config.json", 1, "timeout", "other")
             if e.control.selected == False:
-                updateConfigname("utils/config.json", 2, "mic_index", "other")
+                updateConfigname("utils/config.json", getConfigInfo('microphone', 'active'), "mic_index", "other")
                 updateConfigname("utils/config.json", 'False', "mic_id", "other")
                 updateConfigname("utils/config.json", 30, "timeout", "other")
             e.control.update()
         except Exception as e:
             erorrBanner(e)
+        
 
     def close_dlg(e):
         try:
@@ -438,7 +480,7 @@ def main(page: Page):
             controls=[
                 Icon(
                     name=flet.icons.SETTINGS, 
-                    color=flet.colors.PURPLE_200, 
+                    
                     size=25
                 ), 
                 flet.Text(
@@ -448,7 +490,7 @@ def main(page: Page):
             ]
         ),
         content=flet.Text(
-            "• Protocol 21 (Make backup on server)\n• Protocol 10 (delete all from computer)",
+            "• Protocol 21 (Make backup on server)\n• Protocol 11 (delete all from computer)",
             size=20
         ),
         actions=[
@@ -466,7 +508,7 @@ def main(page: Page):
             controls=[
                 Icon(
                     name=flet.icons.SETTINGS, 
-                    color=flet.colors.PURPLE_200, 
+                    
                     size=20
                 ), 
                 flet.Text(
@@ -506,6 +548,7 @@ def main(page: Page):
 
     def open_dlgInfo_thread():
         thread = threading.Thread(target=open_dlgInfo, args=())
+        thread.daemon = True
         thread.start()
 
     settingsShow = IconButton(icon=icons.ADD_MODERATOR, on_click=open_dlg)
@@ -552,7 +595,7 @@ def main(page: Page):
             icon_size=40,
             #on_click=open_dlgReboot,
             selected=False,
-            style=flet.ButtonStyle(color={"selected": flet.colors.PURPLE_200, "": flet.colors.PURPLE_200}),
+            style=flet.ButtonStyle(color={"selected": flet.colors.DEEP_ORANGE, "": flet.colors.DEEP_ORANGE}),
             disabled=True,
             tooltip="Disabled, function not maked right now"),
         IconButton(
@@ -561,7 +604,7 @@ def main(page: Page):
             icon_size=40,
             on_click=mic_use,
             selected=getConfigInfo('other', 'mic_id'),
-            style=flet.ButtonStyle(color={"selected": flet.colors.PURPLE_200, "": flet.colors.PURPLE_200})),
+            style=flet.ButtonStyle(color={"selected": flet.colors.DEEP_ORANGE, "": flet.colors.DEEP_ORANGE})),
 
             ], alignment=flet.MainAxisAlignment.CENTER )
 
@@ -584,51 +627,52 @@ def main(page: Page):
         moveDeleteFile_thread("chat_history.json", 86400)
 
         print(success+show_current_datetime())
-        print(logInfo+f"Configuration.\n"+logInfo+f"Version app :: {versionConfig}     | Name voice support :: {getConfigInfo('main', 'name')}\n"+logInfo+f"CheckScreen :: {check_screenConfig}    | CheckCamera :: {check_cameraConfig}\n"+logInfo+f"Microphone index :: {mic_indexConfig}  | Microphones show :: {show_micConfig}\n"+logInfo+f"Voice loging :: {voiceLogingConfig}   | FullLogs :: {FullLogsConfig}\n\n"+logInfo+f"Protocol 21 :: {protocols21}    | :: ")
+        print(logInfo+f"✓ Configuration.\n"+logInfo+f"Version app :: {versionConfig}     | Name voice support :: {getConfigInfo('main', 'name')}\n"+logInfo+f"CheckScreen :: {check_screenConfig}    | CheckCamera :: {check_cameraConfig}\n"+logInfo+f"Microphone index :: {mic_indexConfig}  | Microphones show :: {show_micConfig}\n"+logInfo+f"Voice loging :: {voiceLogingConfig}   | FullLogs :: {FullLogsConfig}\n\n"+logInfo+f"Protocol 21 :: {protocols21}    | :: ")
         cmd.value = cmd.value+'\n'+logInfoApp+f"Configuration.\n"+logInfoApp+f"Version app :: {versionConfig}     | Name voice support :: {getConfigInfo('main', 'name')}\n"+logInfoApp+f"CheckScreen :: {check_screenConfig}    | CheckCamera :: {check_cameraConfig}\n"+logInfoApp+f"Microphone index :: {mic_indexConfig}  | Microphones show :: {show_micConfig}\n"+logInfoApp+f"Voice loging :: {voiceLogingConfig}   | FullLogs :: {FullLogsConfig}\n\n"+logInfoApp+f"Protocol 21 :: {protocols21}    | :: "
         page.update()
         if protocols21 == "True":
-            print(logSystem+'протокол 21 был успешно запущен'+stopColor+show_current_datetime())
+            print(logSystem+'✓ протокол 21 был успешно запущен'+stopColor+show_current_datetime())
             Protocol21Thread()
         telegram_contacts_thread()
         bot_thread = threading.Thread(target=run_telegram_bot)
+        bot_thread.daemon = True
         bot_thread.start()
-        cmd.value = cmd.value+'\n'+logSystemApp+'протокол 21 был успешно запущен'+show_current_datetime()
+        cmd.value = cmd.value+'\n'+logSystemApp+'✓ протокол 21 был успешно запущен'+show_current_datetime()
         page.update()
 
-        # if getConfigInfo('main', 'recogniz') == "vosk":
-        #     def Vosklisten():
-        #         if getConfigInfo('vosk', 'model') == 'small_ru':
-        #             model = vosk.Model(lang="ru")
-        #         elif getConfigInfo('vosk', 'model') == 'big_ru':
-        #             model = vosk.Model('modules/voice/vosk-model-ru-0.42')
-        #         samplerate = 16000
-        #         device = getConfigInfo('other', 'mic_index')
-        #         with sd.RawInputStream(samplerate=samplerate, blocksize=8000, device=device, dtype='int16', channels=1, callback=q_callback):
-        #             try:
-        #                 print(logUser+"прослушиваю микрофон"+stopColor)
-        #                 rec = vosk.KaldiRecognizer(model, samplerate)
-        #                 while True:
-        #                     #cmd.value = cmd.value+'\n'+logUserApp+"прослушиваю микрофон"
-        #                     data = q.get()
-        #                     if rec.AcceptWaveform(data):
-        #                         if getConfigInfo('other', 'mic_index') == 2:
-        #                             text = json.loads(rec.Result())["text"]
-        #                             if text == "":
-        #                                 pass
+        if getConfigInfo('main', 'recogniz') == "vosk":
+            def Vosklisten():
+                if getConfigInfo('vosk', 'model') == 'small_ru':
+                    model = vosk.Model(lang="ru")
+                elif getConfigInfo('vosk', 'model') == 'big_ru':
+                    model = vosk.Model('modules/voice/vosk-model-ru-0.42')
+                samplerate = 16000
+                device = getConfigInfo('other', 'mic_index')
+                with sd.RawInputStream(samplerate=samplerate, blocksize=8000, device=device, dtype='int16', channels=1, callback=q_callback):
+                    try:
+                        print(logUser+"прослушиваю микрофон"+stopColor)
+                        rec = vosk.KaldiRecognizer(model, samplerate)
+                        while True:
+                            #cmd.value = cmd.value+'\n'+logUserApp+"прослушиваю микрофон"
+                            data = q.get()
+                            if rec.AcceptWaveform(data):
+                                if getConfigInfo('other', 'mic_index') == 2:
+                                    text = json.loads(rec.Result())["text"]
+                                    if text == "":
+                                        pass
                                         
-        #                             else:
-        #                                 saveTextfile('logs.txt', text, True)
-        #                                 print(logUser+f"вы сказали :: {text}"+stopColor) ; recognized_phrases.append(text)
-        #                                 cmd.value = cmd.value+'\n'+logUserApp+"вы сказали :: " + text
-        #                                 page.update()
-        #                                 process_command(text)
+                                    else:
+                                        saveTextfile('logs.txt', text, True)
+                                        print(logUser+f"вы сказали :: {text}"+stopColor) ; recognized_phrases.append(text)
+                                        cmd.value = cmd.value+'\n'+logUserApp+"вы сказали :: " + text
+                                        page.update()
+                                        process_command(text)
 
-        #             except Exception as e:
-        #                 print(e)
-        #     Vosklisten()
+                    except Exception as e:
+                        print(e)
+            Vosklisten()
         if getConfigInfo('main', 'recogniz') == "speach_recognize":
-            def recognize_speech():
+            async def recognize_speech():
                 from modules.chatgpt import chatWithImage
                 recognizer = sr.Recognizer()
                 while True:
@@ -638,15 +682,9 @@ def main(page: Page):
                             recognizer.adjust_for_ambient_noise(source)
                             audio = recognizer.listen(source, timeout=getConfigInfo('other', 'timeout'))
 
-                            # Создание временного WAV файла
-                            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav_file:
-                                temp_wav_file.write(audio.get_wav_data())
-                                temp_wav_file_name = temp_wav_file.name
+                            text = recognizer.recognize_google(audio, language="ru-RU")
 
                             try:
-                                with sr.AudioFile(temp_wav_file_name) as source:
-                                    audio_data = recognizer.record(source)
-                                    text = recognizer.recognize_google(audio_data, language="ru-RU")
 
                                 saveTextfile('logs.txt', text, True)
                                 print(logSystem+"вы сказали :: " + text + show_current_datetime())
@@ -658,11 +696,12 @@ def main(page: Page):
                                         answerPathIMAGE(answer, all_paths)
                                 if getConfigInfo('main', "chatgpt") == 'gpt-4o':
                                     thread = threading.Thread(target=get, args=())
+                                    thread.daemon = True
                                     thread.start()
 
                                 process_command(text)
-                            finally:
-                                os.remove(temp_wav_file_name)
+                            except Exception as e:
+                                pass
 
                         except sr.UnknownValueError:
                             if FullLogsConfig == "True":
@@ -677,7 +716,7 @@ def main(page: Page):
                             else:
                                 print(logError+f"прошла 1 секунда, но звук не обнаружен." + show_current_datetime())
 
-            recognize_speech()
+            asyncio.run(recognize_speech())
         
     page.fonts = {
             "Crushed": "https://github.com/google/fonts/raw/main/apache/crushed/Crushed-Regular.ttf"
@@ -709,7 +748,7 @@ def main(page: Page):
         controls=[
             Icon(
                 name=flet.icons.SETTINGS, 
-                color=flet.colors.PURPLE_200, 
+                
                 size=30
             ), 
             Text(
@@ -730,7 +769,8 @@ def main(page: Page):
             timeoutLogsCheckbox,
             ShowMicIndexCheckbox
         ], 
-        alignment=flet.MainAxisAlignment.CENTER)
+        alignment=flet.MainAxisAlignment.CENTER,
+    )
 
     settingsBar3 = flet.Row(
         controls=[
@@ -777,7 +817,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -791,7 +831,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -805,7 +845,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -819,7 +859,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -833,7 +873,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -847,7 +887,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -861,7 +901,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -875,7 +915,7 @@ def main(page: Page):
                 controls=[
                     Icon(
                         name=flet.icons.INFO, 
-                        color=flet.colors.PURPLE_200, 
+                        
                         scale=1.2
                     ), 
                     flet.Text(
@@ -2859,5 +2899,55 @@ def main(page: Page):
 
     page.add(flet.Text())
     page.add(cmd)
+    if getConfigInfo('main', 'start') == 0:
+        def open_dlg(e):
+            try:
+                page.dialog = DialogFirst
+                DialogFirst.open = True
+                page.update()
+            except Exception as e:
+                erorrBanner(e)
+
+        def close_dlgf(e):
+            try:
+                DialogFirst.open = False
+                page.update()
+                open_program('utils\\config.json')
+                open_program('utils\\config_info.txt')
+            except Exception as e:
+                erorrBanner(e)
+        DialogFirst = flet.AlertDialog(
+            modal=True,
+            title=flet.Row(
+                controls=[
+                    Icon(
+                        name=flet.icons.SETTINGS, 
+                        
+                        size=25
+                    ), 
+                    flet.Text(
+                        "Complete your config.json file", 
+                        size=25
+                    )
+                ]
+            ),
+            content=flet.Text(
+                "• Please open config file and put all your data in\n• If you need add app for any actions use constructor",
+                size=15
+            ),
+            actions=[
+                flet.TextButton(
+                    "open", 
+                    on_click=close_dlgf
+                ),
+            ],
+            actions_alignment=flet.MainAxisAlignment.END,
+        )
+
+        open_dlg(1)
+        updateConfigname("utils/config.json", getConfigInfo('main', 'start')+1, "start", "main")
+
+    if getConfigInfo('settings', 'Autoload') == 'True':
+        startWorkAI(1)
 
 flet.app(target=main)
