@@ -9,7 +9,7 @@ from addon.checkbox import (accessToScreenCheckbox,
                             ShowMicIndexCheckbox,
                             timeoutLogsCheckbox,
                             getConfigInfo)
-import os, asyncio, vosk, keyboard
+import os, asyncio, vosk, keyboard, requests, datetime
 from modules.protocols import protocol_11
 from flet import ( 
     Banner, 
@@ -337,41 +337,6 @@ cmd = TextField(
 
 def main(page: Page):
 
-    def on_close(e):
-        keyboard.press('win+alt+break')
-    
-    page.on_window_close = on_close
-
-    infoComputer = flet.Text('info lol', size=15)
-
-    page.title = "Voice assistant"
-
-    page.theme_mode = "light"
-    page.theme = theme.Theme(color_scheme_seed=LIGHT_SEED_COLOR, use_material3=True)
-    page.dark_theme = theme.Theme(color_scheme_seed=DARK_SEED_COLOR, use_material3=True)
-
-    page.window_maximizable = False
-
-    page.window_max_width = 1520
-    page.window_max_height = 720
-    page.update()
-
-    def toggle_theme_mode(e):
-        try:
-            page.theme_mode = "dark" if page.theme_mode == "light" else "light"
-            lightMode.icon = (
-                icons.WB_SUNNY_OUTLINED if page.theme_mode == "light" else icons.WB_SUNNY
-            )
-        
-            page.update()
-        except Exception as e:
-            erorrBanner(e)
-
-    lightMode = IconButton(
-        icons.WB_SUNNY_OUTLINED if page.theme_mode == "light" else icons.WB_SUNNY,
-        on_click=toggle_theme_mode,
-    )
-
     def erorrBanner(erorr):
         page.banner = Banner(
             bgcolor=colors.AMBER_100,
@@ -408,7 +373,1063 @@ def main(page: Page):
         )
         page.banner.open = True
         page.update()
-        print(erorr)
+        #print(erorr)
+
+    API_KEY_WEATHER = 'db986886bc22744d4dbb14d5af5308f3'
+
+    def get_weather_data(city, lang='ru'):
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY_WEATHER}&units=metric&lang={lang}"
+        response = requests.get(url)
+        return response.json()
+
+    
+    def get_temperature(city):
+        try:
+            data = get_weather_data(city)
+            return data['main']['temp']
+        except Exception as e:
+            erorrBanner('Введите ваш город в настройках или в конфиге')
+            print(logError+f'Ошибка в модуле виджета температур :: {e}')
+
+    def get_precipitation_probability(city):
+        try:
+            data = get_weather_data(city)
+            if 'rain' in data:
+                return data['rain']['1h'] if '1h' in data['rain'] else data['rain']['3h']
+            elif 'snow' in data:
+                return data['snow']['1h'] if '1h' in data['snow'] else data['snow']['3h']
+            else:
+                return 0 
+        except Exception as e:
+            erorrBanner('Введите ваш город в настройках или в конфиге')
+            print(logError+f'Ошибка в модуле виджета температур :: {e}')
+
+    def get_humidity(city):
+        try:
+            data = get_weather_data(city)
+            return data['main']['humidity']
+        except Exception as e:
+            erorrBanner('Введите ваш город в настройках или в конфиге')
+            print(logError+f'Ошибка в модуле виджета температур :: {e}')
+
+    def get_wind(city):
+        try:
+            data = get_weather_data(city)
+            return data['wind']['speed']
+        except Exception as e:
+            erorrBanner('Введите ваш город в настройках или в конфиге')
+            print(logError+f'Ошибка в модуле виджета температур :: {e}')
+
+    def get_precipitation(city):
+        try:     
+            data = get_weather_data(city)
+            if 'rain' in data:
+                return data['rain']['1h'] if '1h' in data['rain'] else data['rain']['3h']
+            elif 'snow' in data:
+                return data['snow']['1h'] if '1h' in data['snow'] else data['snow']['3h']
+            else:
+                return 0 
+        except Exception as e:
+            erorrBanner('Введите ваш город в настройках или в конфиге')
+            print(logError+f'Ошибка в модуле виджета температур :: {e}')
+
+    def on_close(e):
+        keyboard.press('win+alt+break')
+    
+    page.on_window_close = on_close
+    city = getConfigInfo('main', 'city')
+
+    infoComputer = flet.Text('info lol', size=15)
+
+    page.title = "Voice assistant"
+
+    page.theme_mode = "dark"
+    page.theme = theme.Theme(color_scheme_seed=LIGHT_SEED_COLOR, use_material3=True)
+    page.dark_theme = theme.Theme(color_scheme_seed=DARK_SEED_COLOR, use_material3=True)
+
+    page.window_maximizable = False
+
+    page.window_width = 1350
+    page.window_height = 700
+
+    page.window_max_width = 1520 ; page.window_min_width = 1350
+    page.window_max_height = 720 ; page.window_min_height = 700
+    page.update()
+
+    temperature_text = ft.Text(
+        value=f'{get_temperature(city)}°C',
+        size=50,
+        weight=ft.FontWeight.BOLD
+    )
+    precipitation_text = ft.Text(
+            value=f'вероятность осадков: {get_precipitation_probability(city)}%',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+    humidity_text = ft.Text(
+            value=f'влажность: {get_humidity(city)}%',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+    wind_text = ft.Text(
+            value=f'ветер: {get_wind(city)} м/с',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+    divider_text = ft.Text(
+            value='―――――',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+    falling_text = ft.Text(
+            value='осадки',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+    def update_color():
+        if page.theme_mode == 'dark':
+            temperature_text.color = ft.colors.WHITE
+            precipitation_text.color = ft.colors.WHITE
+            humidity_text.color = ft.colors.WHITE
+            wind_text.color = ft.colors.WHITE
+            divider_text.color = ft.colors.WHITE
+            falling_text.color = ft.colors.WHITE
+        else:
+            temperature_text.color = ft.colors.BLUE_900
+            precipitation_text.color = ft.colors.BLUE_900
+            humidity_text.color = ft.colors.BLUE_900
+            wind_text.color = ft.colors.BLUE_900
+            divider_text.color = ft.colors.BLUE_900
+            falling_text.color = ft.colors.BLUE_900
+        page.update()
+
+    def toggle_theme_mode(e):
+        try:
+            page.theme_mode = "dark" if page.theme_mode == "light" else "light"
+            lightMode.icon = (
+                icons.WB_SUNNY_OUTLINED if page.theme_mode == "light" else icons.WB_SUNNY
+            )
+            update_color()
+            page.update()
+        except Exception as e:
+            erorrBanner(e)
+
+    def get_exchange_rate_data():
+        url = "https://api.coingecko.com/api/v3/coins/tether/market_chart"
+        params = {
+            "vs_currency": "rub",
+            "days": "30", 
+            "interval": "daily"
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+        
+        exchange_rate_data = []
+        for item in data["prices"]:
+            date = datetime.datetime.fromtimestamp(item[0] / 1000).strftime('%Y-%m-%d')
+            rate = round(item[1], 2)
+            exchange_rate_data.append({"date": date, "rate": rate})
+        
+        return exchange_rate_data
+    
+    exchange_rate_data = get_exchange_rate_data()
+
+    dates = [datetime.datetime.strptime(item["date"], "%Y-%m-%d").date() for item in exchange_rate_data]
+    rates = [item["rate"] for item in exchange_rate_data]
+
+    data_series = [
+        ft.LineChartData(
+            data_points=[ft.LineChartDataPoint(x, y) for x, y in enumerate(rates)],
+            stroke_width=4,
+            color=ft.colors.LIGHT_GREEN,
+            curved=True,
+            stroke_cap_round=True,
+        )
+    ]
+
+    chart = ft.LineChart(
+        data_series=data_series,
+        border=ft.Border(
+            bottom=ft.BorderSide(4, ft.colors.with_opacity(0.5, ft.colors.ON_SURFACE))
+        ),
+        left_axis=ft.ChartAxis(
+            labels=[
+                ft.ChartAxisLabel(
+                    value=i,
+                    label=ft.Text(str(round(rate, 2)), size=14, weight=ft.FontWeight.BOLD, color=ft.colors.GREEN_400),
+                ) for i, rate in enumerate(rates[::len(rates)//6])
+            ],
+            labels_size=40,
+        ),
+        bottom_axis=ft.ChartAxis(
+            labels=[
+                ft.ChartAxisLabel(
+                    value=i,
+                    label=ft.Container(
+                        ft.Text(
+                            dates[i].strftime("%b %d"),
+                            size=13,
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.colors.with_opacity(0.5, ft.colors.ON_SURFACE),
+                        ),
+                        margin=ft.margin.only(top=10),
+                    ),
+                ) for i in range(0, len(dates), len(dates)//6)
+            ],
+            labels_size=32,
+        ),
+        tooltip_bgcolor=ft.colors.with_opacity(0.8, ft.colors.BLUE_GREY),
+        min_y=min(rates) - 1,
+        max_y=max(rates) + 1,
+        min_x=0,
+        max_x=len(rates) - 1,
+        expand=True,
+    )
+
+    info_row = ft.Row(
+        controls=[
+            ft.Icon(
+                name=ft.icons.STAR_BORDER,
+                size=40
+            ),
+            ft.Text(
+                value=f'CONSOLE LOGS',
+                weight=ft.FontWeight.BOLD,
+                size=18
+            ),
+        ]
+    )
+
+    cmd_info = ft.ListView(
+        controls=[
+            info_row
+        ],
+        padding=ft.padding.all(15),
+        spacing=10,
+        auto_scroll=True
+    )
+
+    def add_cmd_info(who, values):
+        if who == 'user':
+            cmd_info.controls.append(
+                ft.Row(
+                    controls=[
+                        ft.Icon(
+                            name=ft.icons.CIRCLE,
+                            size=10,
+                            color=ft.colors.GREEN_400
+                        ),
+                        ft.Text(
+                            value=f'{values}',
+                            weight=ft.FontWeight.W_500,
+                            size=15,
+                            color=ft.colors.GREEN_400
+                        )
+                    ],
+                    spacing=10
+                )
+            )
+        else:
+            cmd_info.controls.append(
+                ft.Row(
+                    controls=[
+                        ft.Icon(
+                            name=ft.icons.CIRCLE,
+                            size=10,
+                            color=ft.colors.PURPLE_400
+                        ),
+                        ft.Text(
+                            value=f'{values}',
+                            weight=ft.FontWeight.W_500,
+                            size=15,
+                            color=ft.colors.PURPLE_400
+                        )
+                    ],
+                    spacing=10
+                )
+            )
+
+    cmd = ft.Container(
+        cmd_info,
+        expand=True,
+        border=ft.border.all(1),
+        border_radius=30
+    )
+
+    command_list = ft.ListView(
+        controls=[
+            ft.Container(
+                ft.ExpansionPanelList(
+                    expand_icon_color=ft.colors.GREEN_300,
+                    elevation=8,
+                    controls=[
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='очистка корзины',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: (о/по/от)чисти, корзину',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                            expanded=True
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='открытие программ',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: (открой/включи), <назавание программы>',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_ACCENT_700
+                                                ),
+                                                ft.Text(
+                                                    value='Информация: команда может быть любой сделаной вами',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='открытие вебсайтов',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: (открой), <назавание сайта>',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_ACCENT_700
+                                                ),
+                                                ft.Text(
+                                                    value='Информация: команда может быть любой сделаной вами',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='включение музыки на фон',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: включи, музыку, на, фон',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_ACCENT_700
+                                                ),
+                                                ft.Text(
+                                                    value='Информация: команда может быть любой сделаной вами',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='игровой режим',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: (запусти/включи) игровой режим',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='включение игр',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: (октрой/запусти) <название>',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_ACCENT_700
+                                                ),
+                                                ft.Text(
+                                                    value='Информация: команда может быть любой сделаной вами',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='таймер',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам:\n(включи|запусти|сделай|поставь) таймер на (.+)',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='ответ на любой вопрос',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: <Имя асситента> вопрос\nдальше будет диалог, его можно завершить,\nпопросив об этом ассистента',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_ACCENT_700
+                                                ),
+                                                ft.Text(
+                                                    value='Информация: Завершить диалог можно\nлюбой понятной фразой завершения',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='погода',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: какая сейчас\nпогода в <город>',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='последние новости',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: новости, сейчас, последние',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='управление звуком',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: громкость, на, максимум\nсделай, звук, тише, громче, снизь, понизь, увеличь\nгромкость, на, всю',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                        ft.ExpansionPanel(
+                            header=ft.Container(
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.BOLT_OUTLINED,
+                                            size=20,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='написание контактам в телеграм',
+                                            weight=ft.FontWeight.W_500,
+                                            size=15,
+                                        ),
+                                    ]
+                                ),
+                                alignment=ft.alignment.center_left,
+                                padding=ft.padding.only(left=15)
+                            ),
+                            content=ft.Container(
+                                ft.Column(
+                                    controls=[
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_300
+                                                ),
+                                                ft.Text(
+                                                    value='активация команды по словам: (от)напиши <имя> <фраза>',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Row(
+                                            controls=[
+                                                ft.Icon(
+                                                    name=ft.icons.CIRCLE,
+                                                    size=10,
+                                                    color=ft.colors.GREEN_ACCENT_700
+                                                ),
+                                                ft.Text(
+                                                    value='Информация: Важно нужен telegram.session\nфайл в папке /session чтобы функция работала',
+                                                    weight=ft.FontWeight.W_500,
+                                                    size=12,
+                                                ),
+                                            ],
+                                            spacing=10
+                                        )
+                                    ]
+                                ),
+                                padding=ft.padding.all(15)
+                            ),
+                        ),
+                    ]
+                ),
+                border_radius=30,
+                width=350,
+                border=ft.border.all(2, color=ft.colors.WHITE24)
+            )
+        ]
+    )
+
+    def weather_info(city):
+        temperature_text = ft.Text(
+            value=f'{get_temperature(city)}°C',
+            size=50,
+            weight=ft.FontWeight.BOLD
+        )
+        precipitation_text = ft.Text(
+            value=f'вероятность осадков: {get_precipitation_probability(city)}%',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+        humidity_text = ft.Text(
+            value=f'влажность: {get_humidity(city)}%',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+        wind_text = ft.Text(
+            value=f'ветер: {get_wind(city)} м/с',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+        divider_text = ft.Text(
+            value='―――――',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+
+        falling_text = ft.Text(
+            value='осадки',
+            size=14,
+            weight=ft.FontWeight.W_500
+        )
+        return ft.Stack(
+            [
+                ft.Container(
+                    content=ft.Icon(
+                        name=ft.icons.TERRAIN,
+                        size=280,
+                        color=ft.colors.BLUE_300,
+                        opacity=0.3
+                    ),
+                    alignment=ft.alignment.bottom_left,
+                    padding=ft.padding.only(left=10)
+                ),
+                ft.Container(
+                    content=ft.Text(
+                        value=f'{city}',
+                        weight=ft.FontWeight.BOLD,
+                        size=18
+                    ),
+                    alignment=ft.alignment.bottom_left,
+                    padding=ft.padding.all(10)
+                ),
+                ft.Row(
+                    controls=[
+                        ft.Column(
+                            controls=[
+                                ft.Container(
+                                    temperature_text,
+                                    padding=ft.padding.only(left=10)
+                                ),
+                            ],
+                        ),
+                        ft.Column(
+                            controls=[
+                                ft.Container(
+                                    precipitation_text,
+                                    padding=ft.padding.only(top=20)
+                                ),
+                                ft.Container(
+                                    humidity_text
+                                ),
+                                ft.Container(
+                                    wind_text
+                                ),
+                                ft.Divider(),
+                                ft.Container(
+                                    content=ft.Row(
+                                        controls=[
+                                            ft.Container(
+                                                divider_text
+                                            ),
+                                            ft.Container(
+                                                ft.Icon(
+                                                    name=icons.WATER_DROP_OUTLINED,
+                                                    color=ft.colors.BLUE_300,
+                                                    scale=4
+                                                ),
+                                                padding=ft.padding.only(left=30)
+                                            )
+                                        ]
+                                    )
+                                ),
+                                ft.Container(
+                                    falling_text,
+                                    padding=ft.padding.only(left=10, bottom=10)
+                                ),
+                            ],
+                            spacing=10
+                        ),
+                    ],
+                    spacing=40
+                ),
+            ]
+    )
+
+    widgets = ft.Row(
+        controls=[
+            ft.Container(
+                content=weather_info(city),
+                expand=True,
+                border=ft.border.all(1, color=ft.colors.BLUE_900),
+                border_radius=30,
+            ),
+            ft.Container(
+                content=command_list,
+                expand=True,
+                border=ft.border.all(1, color=ft.colors.GREEN_300),
+                border_radius=30
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Icon(
+                                    name=ft.icons.ATTACH_MONEY,
+                                    size=15,
+                                    color=ft.colors.GREEN_300
+                                ),
+                                ft.Text(
+                                    value='USD TO RUB',
+                                    weight=ft.FontWeight.W_500,
+                                    size=12,
+                                ),
+                            ],
+                            spacing=10,
+                        ),
+                        chart
+                    ]
+                ),
+                expand=True,
+                border=ft.border.all(1, color=ft.colors.GREEN_300),
+                border_radius=30,
+                padding=ft.padding.all(15)
+            ),
+        ],
+        spacing=10,
+        height=200
+    )
+
+    lightMode = IconButton(
+        icons.WB_SUNNY_OUTLINED if page.theme_mode == "light" else icons.WB_SUNNY,
+        on_click=toggle_theme_mode,
+    )
 
     def check_item_clicked(e):
         e.control.checked = not e.control.checked
@@ -555,10 +1576,49 @@ def main(page: Page):
     settingsShow = IconButton(icon=icons.ADD_MODERATOR, on_click=open_dlg)
     page.padding = 30
 
+    def switchwork(e):
+        startWorkSwitch.disabled = True
+        startWorkAI(1)
+
+    startWorkSwitch = ft.Switch(
+        value=False,
+        inactive_thumb_color=ft.colors.GREEN_400,
+        inactive_track_color=ft.colors.GREEN_100,
+        active_color=ft.colors.GREEN_400,
+        active_track_color=ft.colors.GREEN_100,
+        on_change=switchwork
+    )
+
     page.appbar = AppBar(
         leading=Icon(icons.ACCOUNT_CIRCLE),
         leading_width=60,
-        title=Text(f"Voice assistant"),
+        title=ft.Container(
+            ft.Row(
+                controls=[
+                    Text(f"Voice assistant"),
+                    ft.Container(
+                        ft.Row(
+                            controls=[
+                                ft.Icon(
+                                    name=ft.icons.HELP,
+                                    size=25,
+                                    color=ft.colors.GREEN_300
+                                ),
+                                ft.Text(
+                                    value='Start assistant',
+                                    weight=ft.FontWeight.W_500,
+                                    size=20,
+                                ),
+                                startWorkSwitch 
+                            ]
+                        ),
+                        padding=ft.padding.only(left=350)
+                    )
+                ],
+                spacing=10
+            ),
+            expand=True
+        ),
         center_title=False,
         actions=[
             lightMode,
@@ -596,7 +1656,6 @@ def main(page: Page):
             icon_size=40,
             #on_click=open_dlgReboot,
             selected=False,
-            style=flet.ButtonStyle(color={"selected": flet.colors.DEEP_ORANGE, "": flet.colors.DEEP_ORANGE}),
             disabled=True,
             tooltip="Disabled, function not maked right now"),
         IconButton(
@@ -605,16 +1664,20 @@ def main(page: Page):
             icon_size=40,
             on_click=mic_use,
             selected=getConfigInfo('other', 'mic_id'),
-            style=flet.ButtonStyle(color={"selected": flet.colors.DEEP_ORANGE, "": flet.colors.DEEP_ORANGE})),
+        ),
 
-            ], alignment=flet.MainAxisAlignment.CENTER )
+        ],
+        alignment=flet.MainAxisAlignment.CENTER
+    )
 
     def startWorkAI(e):
         from modules.other import show_current_datetime
         
         startWorkButton.disabled = True
         show_banner(1)
-        cmd.value = cmd.value+successApp+show_current_datetime()
+        cmd_info.controls.append(
+            ft.Text(successApp+show_current_datetime())
+        )
         if show_mic == "True":
             for index, name in enumerate(sr.Microphone.list_microphone_names()):
                 print(logSystem+f"Микрофон с индексом {index}: {name}"+stopColor)
@@ -629,7 +1692,9 @@ def main(page: Page):
 
         print(success+show_current_datetime())
         print(logInfo+f"✓ Configuration.\n"+logInfo+f"Version app :: {versionConfig}     | Name voice support :: {getConfigInfo('main', 'name')}\n"+logInfo+f"CheckScreen :: {check_screenConfig}    | CheckCamera :: {check_cameraConfig}\n"+logInfo+f"Microphone index :: {mic_indexConfig}  | Microphones show :: {show_micConfig}\n"+logInfo+f"Voice loging :: {voiceLogingConfig}   | FullLogs :: {FullLogsConfig}\n\n"+logInfo+f"Protocol 21 :: {protocols21}    | :: ")
-        cmd.value = cmd.value+'\n'+logInfoApp+f"Configuration.\n"+logInfoApp+f"Version app :: {versionConfig}     | Name voice support :: {getConfigInfo('main', 'name')}\n"+logInfoApp+f"CheckScreen :: {check_screenConfig}    | CheckCamera :: {check_cameraConfig}\n"+logInfoApp+f"Microphone index :: {mic_indexConfig}  | Microphones show :: {show_micConfig}\n"+logInfoApp+f"Voice loging :: {voiceLogingConfig}   | FullLogs :: {FullLogsConfig}\n\n"+logInfoApp+f"Protocol 21 :: {protocols21}    | :: "
+        cmd_info.controls.append(
+            ft.Text(logInfoApp+f"Configuration.\n"+logInfoApp+f"Version app :: {versionConfig}     | Name voice support :: {getConfigInfo('main', 'name')}\n"+logInfoApp+f"CheckScreen :: {check_screenConfig}    | CheckCamera :: {check_cameraConfig}\n"+logInfoApp+f"Microphone index :: {mic_indexConfig}  | Microphones show :: {show_micConfig}\n"+logInfoApp+f"Voice loging :: {voiceLogingConfig}   | FullLogs :: {FullLogsConfig}\n\n"+logInfoApp+f"Protocol 21 :: {protocols21}    | :: ")
+        )
         page.update()
         if protocols21 == "True":
             print(logSystem+'✓ протокол 21 был успешно запущен'+stopColor+show_current_datetime())
@@ -638,7 +1703,9 @@ def main(page: Page):
         bot_thread = threading.Thread(target=run_telegram_bot)
         bot_thread.daemon = True
         bot_thread.start()
-        cmd.value = cmd.value+'\n'+logSystemApp+'✓ протокол 21 был успешно запущен'+show_current_datetime()
+        cmd_info.controls.append(
+            ft.Text('✓ протокол 21 был успешно запущен'+show_current_datetime())
+        )
         page.update()
 
         if getConfigInfo('main', 'recogniz') == "vosk":
@@ -665,7 +1732,9 @@ def main(page: Page):
                                     else:
                                         saveTextfile('logs.txt', text, True)
                                         print(logUser+f"вы сказали :: {text}"+stopColor) ; recognized_phrases.append(text)
-                                        cmd.value = cmd.value+'\n'+logUserApp+"вы сказали :: " + text
+                                        cmd_info.controls.append(
+                                            ft.Text(f'{logUserApp}+"вы сказали :: " + {text}'+show_current_datetime())
+                                        )
                                         page.update()
                                         process_command(text)
 
@@ -679,7 +1748,11 @@ def main(page: Page):
                 while True:
                     with sr.Microphone(device_index=getConfigInfo('other', 'mic_index')) as source:
                         try:
+                            cmd_info.controls.append(
+                                ft.Text(logSystemApp+'прослушиваю микрофон' + show_current_datetime())
+                            )
                             print(logSystem+"прослушиваю микрофон" + show_current_datetime())
+                            page.update()
                             recognizer.adjust_for_ambient_noise(source)
                             audio = recognizer.listen(source, timeout=getConfigInfo('other', 'timeout'))
 
@@ -690,6 +1763,10 @@ def main(page: Page):
                                 saveTextfile('logs.txt', text, True)
                                 print(logSystem+"вы сказали :: " + text + show_current_datetime())
                                 recognized_phrases.append(text)
+                                cmd_info.controls.append(
+                                    ft.Text(f'{logUserApp}+"вы сказали :: " + {text}'+show_current_datetime())
+                                )
+                                page.update()
 
                                 def get():
                                     answer = chatWithImage(text)
@@ -730,6 +1807,18 @@ def main(page: Page):
         updateConfigname("utils/config.json", e.control.value, "chatgpt", "main")
         page.update()
 
+    def changedCity(e):
+        updateConfigname("utils/config.json", e.control.value, "city", "main")
+        page.update()
+
+    def changedTelegramToken(e):
+        updateConfigname("utils/config.json", e.control.value, "API_TOKEN", "telegram")
+        page.update()
+
+    def changedTelegramId(e):
+        updateConfigname("utils/config.json", e.control.value, "ALLOWED_USER", "telegram")
+        page.update()
+
     nameConfig = TextField(
         label="Name assistant", 
         value=getConfigInfo('main', 'name'), 
@@ -744,6 +1833,30 @@ def main(page: Page):
         height=90, 
         hint_text="Type chatgpt version", 
         on_change=changedGPT)
+    
+    CityChange = TextField(
+        label="Your City", 
+        value=getConfigInfo('main', 'city'), 
+        width=250, 
+        height=90, 
+        hint_text="Type your city", 
+        on_change=changedCity)
+    
+    TelegramTokenChange = TextField(
+        label="Your bot token telegram", 
+        value=getConfigInfo('telegram', 'API_TOKEN'), 
+        width=250, 
+        height=90, 
+        hint_text="Type your bot token telegram", 
+        on_change=changedTelegramToken)
+    
+    TelegramUserChange = TextField(
+        label="Your telegram id", 
+        value=getConfigInfo('telegram', 'ALLOWED_USER'), 
+        width=250, 
+        height=90, 
+        hint_text="Type your id telegram", 
+        on_change=changedCity)
 
     settingsBar1 = flet.Row(
         controls=[
@@ -770,14 +1883,19 @@ def main(page: Page):
             timeoutLogsCheckbox,
             ShowMicIndexCheckbox
         ], 
+        spacing=10,
         alignment=flet.MainAxisAlignment.CENTER,
     )
 
     settingsBar3 = flet.Row(
         controls=[
             nameConfig, 
-            chatGPT_Version
-        ], 
+            chatGPT_Version,
+            CityChange,
+            TelegramTokenChange,
+            TelegramUserChange
+        ],
+        spacing=10, 
         alignment=flet.MainAxisAlignment.CENTER) 
        
     startWorkButton = ElevatedButton(
@@ -791,19 +1909,55 @@ def main(page: Page):
         nav_dest = e.control.selected_index 
 
         if nav_dest == 0:
-            page.padding = 30
-            page.add(
-                Text(
-                    "Welcome to voice assistant", 
-                    style="displayLarge"
-                ),
-                Text(
-                    "  This voice assistant can help you with any of your actions. Answer any question and maintain a dialogue", 
-                    style="titleMedium"
-                ))
-            page.add(startWorkButton)
-            page.add(flet.Text())
+            city = getConfigInfo('main', 'city')
+
+            widgets = ft.Row(
+                controls=[
+                    ft.Container(
+                        content=weather_info(city),
+                        expand=True,
+                        border=ft.border.all(1, color=ft.colors.BLUE_900),
+                        border_radius=30,
+                    ),
+                    ft.Container(
+                        content=command_list,
+                        expand=True,
+                        border=ft.border.all(1, color=ft.colors.GREEN_300),
+                        border_radius=30
+                    ),
+                    ft.Container(
+                        content=ft.Column(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Icon(
+                                            name=ft.icons.ATTACH_MONEY,
+                                            size=15,
+                                            color=ft.colors.GREEN_300
+                                        ),
+                                        ft.Text(
+                                            value='USD TO RUB',
+                                            weight=ft.FontWeight.W_500,
+                                            size=12,
+                                        ),
+                                    ],
+                                    spacing=10,
+                                ),
+                                chart
+                            ]
+                        ),
+                        expand=True,
+                        border=ft.border.all(1),
+                        border_radius=30,
+                        padding=ft.padding.all(15)
+                    ),
+                ],
+                spacing=10,
+                height=200
+            )
             page.add(cmd)
+            page.add(widgets)
+            update_color()
 
         if nav_dest == 2:
             page.add(settingsBar1)
@@ -2856,16 +4010,6 @@ def main(page: Page):
         ],
         on_change=change_content
     )
-    page.add(
-        Text(
-            "Welcome to voice assistant", 
-            style="displayLarge"
-        ),
-        Text(
-            "  This voice assistant can help you with any of your actions. Answer any question and maintain a dialogue", 
-            style="titleMedium"
-            )
-        )
     
     def close_banner(e):
         page.banner.open = False
@@ -2896,10 +4040,13 @@ def main(page: Page):
         page.banner.open = True
         page.update()
 
-    page.add(startWorkButton)
+    #page.add(startWorkButton)
+    #page.add(flet.Text())
+    #page.add(cmd)
 
-    page.add(flet.Text())
     page.add(cmd)
+    page.add(widgets)
+    update_color()
     if getConfigInfo('main', 'start') == 0:
         def open_dlg(e):
             try:
@@ -2949,6 +4096,9 @@ def main(page: Page):
         updateConfigname("utils/config.json", getConfigInfo('main', 'start')+1, "start", "main")
 
     if getConfigInfo('settings', 'Autoload') == 'True':
+        startWorkSwitch.disabled = True
+        startWorkSwitch.value = True
+        page.update()
         startWorkAI(1)
 
 flet.app(target=main)
